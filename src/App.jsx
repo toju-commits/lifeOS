@@ -48,14 +48,36 @@ const initialClasses = [
   { id: 3, name: "School / Work", estimate: "Unknown", best: "Clear next steps", risk: "Medium", outreach: "Not started", action: "Add active deadlines or responsibilities" },
 ];
 
-const vaultItems = [
-  { title: "Resume / Profile", status: "Optional", icon: Briefcase, xp: 100 },
-  { title: "Important Documents", status: "Optional", icon: Upload, xp: 100 },
-  { title: "Goal Evidence", status: "Optional", icon: Target, xp: 100 },
-  { title: "Accountability Contacts", status: "Optional", icon: Mail, xp: 100 },
+const iconMap = {
+  Activity,
+  BatteryCharging,
+  Brain,
+  Briefcase,
+  CheckCircle2,
+  Crosshair,
+  Database,
+  Dumbbell,
+  GraduationCap,
+  Heart,
+  Mail,
+  Radar,
+  Shield,
+  Sparkles,
+  Target,
+  Terminal,
+  Trophy,
+  Upload,
+  Zap,
+};
+
+const defaultVaultItems = [
+  { title: "Resume / Profile", status: "Optional", icon: "Briefcase", xp: 100 },
+  { title: "Important Documents", status: "Optional", icon: "Upload", xp: 100 },
+  { title: "Goal Evidence", status: "Optional", icon: "Target", xp: 100 },
+  { title: "Accountability Contacts", status: "Optional", icon: "Mail", xp: 100 },
 ];
 
-const futureQuests = [
+const defaultFutureQuests = [
   {
     title: "Custom Future Quest",
     type: "Long-term vision",
@@ -65,6 +87,22 @@ const futureQuests = [
     mechanics: ["Long-term ideas", "Vision capture", "Future self planning", "Optional experiments"],
   },
 ];
+
+const defaultCustomStats = [
+  { label: "Setup", source: "setup", icon: "Sparkles" },
+  { label: "Focus", source: "focus", icon: "Target" },
+  { label: "Energy", source: "energy", icon: "BatteryCharging" },
+  { label: "Support", source: "support", icon: "Heart" },
+  { label: "Clarity", source: "clarity", icon: "Brain" },
+  { label: "Momentum", source: "momentum", icon: "Zap" },
+];
+
+const defaultDashboardLabels = {
+  stability: "Life Stability",
+  completion: "Daily Completion",
+  rewards: "Reward Queue",
+  nextMove: "Next Move",
+};
 
 const systemRoadmap = [
   { title: "localStorage persistence", status: "Implemented", detail: "State survives refresh on the same browser/device. No cloud account yet." },
@@ -83,6 +121,7 @@ const defaultProfile = {
   name: "New Operator",
   archetype: "LifeOS User",
   mainQuest: "Build a personalized operating system",
+  tagline: "Dump the chaos. Build the command center.",
   tone: "Direct and supportive",
   theme: "Hacker",
   currentSeason: "Genesis Setup",
@@ -100,6 +139,32 @@ const formatNumber = (value, decimals = 0) => {
   return fixed.includes(".") ? fixed.replace(/0+$/, "").replace(/\.$/, "") : fixed;
 };
 const displayPercent = (value) => formatNumber(clamp(value), 0);
+const validTabs = new Set(["missions", "areas", "pathways", "vault", "daily", "genesis", "ai", "log", "future", "system", "achievements"]);
+const normalizeTab = (value) => {
+  const legacyAreasTab = ["g", "p", "a"].join("");
+  const tab = value === legacyAreasTab ? "areas" : safeText(value, 40);
+  return validTabs.has(tab) ? tab : "";
+};
+
+const hasPersonalizedProfile = (profile = {}) => {
+  if (!profile || typeof profile !== "object") return false;
+  return ["name", "archetype", "mainQuest", "currentSeason", "tagline"].some((key) => {
+    const value = safeText(profile[key], 180);
+    return value && value !== defaultProfile[key];
+  });
+};
+
+const normalizeProfile = (profile = {}) => ({
+  ...defaultProfile,
+  ...profile,
+  name: safeText(profile.name || defaultProfile.name, 80),
+  archetype: safeText(profile.archetype || defaultProfile.archetype, 120),
+  mainQuest: safeText(profile.mainQuest || defaultProfile.mainQuest, 160),
+  tagline: safeText(profile.tagline || defaultProfile.tagline, 180),
+  tone: safeText(profile.tone || defaultProfile.tone, 120),
+  theme: safeText(profile.theme || defaultProfile.theme, 80),
+  currentSeason: safeText(profile.currentSeason || defaultProfile.currentSeason, 120),
+});
 
 const normalizeTask = (task, idx = 0) => ({
   id: task?.id || `seed-task-${idx}-${slugText(task?.text)}`,
@@ -131,6 +196,38 @@ const normalizeClass = (item, idx = 0) => ({
   risk: safeText(item?.risk || "Medium", 80),
   outreach: safeText(item?.outreach || "Not yet", 160),
   action: safeText(item?.action || "Define action", 260),
+});
+
+const normalizeVaultItem = (item, idx = 0) => ({
+  title: safeText(item?.title || `Vault Item ${idx + 1}`, 120),
+  status: safeText(item?.status || "Optional", 60),
+  icon: safeText(item?.icon || "Database", 40),
+  xp: Math.round(clamp(item?.xp ?? 100, 0, 5000)),
+});
+
+const normalizeFutureQuest = (quest, idx = 0) => ({
+  title: safeText(quest?.title || `Future Quest ${idx + 1}`, 120),
+  type: safeText(quest?.type || "Long-term vision", 120),
+  status: safeText(quest?.status || "Blank", 80),
+  priority: safeText(quest?.priority || "Later", 100),
+  desc: safeText(quest?.desc || "Capture a future goal or experiment.", 500),
+  mechanics: Array.isArray(quest?.mechanics) && quest.mechanics.length
+    ? quest.mechanics.slice(0, 8).map((item) => safeText(item, 120))
+    : ["Vision capture", "Next action", "Optional experiment"],
+});
+
+const normalizeCustomStat = (stat, idx = 0) => ({
+  label: safeText(stat?.label || `Stat ${idx + 1}`, 80),
+  source: safeText(stat?.source || stat?.key || slugText(stat?.label || `stat-${idx}`), 40),
+  value: stat?.value === undefined ? undefined : Math.round(clamp(stat.value)),
+  icon: safeText(stat?.icon || "Activity", 40),
+});
+
+const normalizeDashboardLabels = (labels = {}) => ({
+  ...defaultDashboardLabels,
+  ...Object.fromEntries(
+    Object.entries(labels || {}).map(([key, value]) => [key, safeText(value, 80)])
+  ),
 });
 
 const achievements = [
@@ -247,6 +344,10 @@ export default function LifeOSGenesis() {
   const t = theme[mode];
   const [missions, setMissions] = useState(initialMissions);
   const [classes, setClasses] = useState(initialClasses);
+  const [personalVaultItems, setPersonalVaultItems] = useState(defaultVaultItems);
+  const [personalFutureQuests, setPersonalFutureQuests] = useState(defaultFutureQuests);
+  const [customStats, setCustomStats] = useState(defaultCustomStats);
+  const [dashboardLabels, setDashboardLabels] = useState(defaultDashboardLabels);
   const [dailyInput, setDailyInput] = useState("");
   const [genesisStep, setGenesisStep] = useState(1);
   const [genesisLoading, setGenesisLoading] = useState(false);
@@ -271,19 +372,29 @@ export default function LifeOSGenesis() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
-      const loadedLegacy = !localStorage.getItem(STORAGE_KEY) && Boolean(localStorage.getItem(LEGACY_STORAGE_KEY));
+      const primarySave = localStorage.getItem(STORAGE_KEY);
+      const legacySave = localStorage.getItem(LEGACY_STORAGE_KEY);
+      const saved = primarySave || legacySave;
+      const loadedLegacy = !primarySave && Boolean(legacySave);
       if (saved) {
         const data = JSON.parse(saved);
-        if (data.profile && typeof data.profile === "object") setProfile({ ...defaultProfile, ...data.profile, name: safeText(data.profile.name || defaultProfile.name, 80), archetype: safeText(data.profile.archetype || defaultProfile.archetype, 120), mainQuest: safeText(data.profile.mainQuest || defaultProfile.mainQuest, 160), tone: safeText(data.profile.tone || defaultProfile.tone, 120), theme: safeText(data.profile.theme || defaultProfile.theme, 80), currentSeason: safeText(data.profile.currentSeason || defaultProfile.currentSeason, 120) });
+        const loadedProfile = normalizeProfile(data.profile || {});
+        setProfile(loadedProfile);
         if (data.mode) setMode(data.mode);
         if (Array.isArray(data.missions)) setMissions(data.missions.slice(0, 30).map(normalizeMission));
         if (Array.isArray(data.classes)) setClasses(data.classes.slice(0, 30).map(normalizeClass));
+        if (Array.isArray(data.vaultItems)) setPersonalVaultItems(data.vaultItems.slice(0, 30).map(normalizeVaultItem));
+        if (Array.isArray(data.futureQuests)) setPersonalFutureQuests(data.futureQuests.slice(0, 20).map(normalizeFutureQuest));
+        const savedStats = Array.isArray(data.customStats) ? data.customStats : data.statConfig;
+        if (Array.isArray(savedStats)) setCustomStats(savedStats.slice(0, 12).map(normalizeCustomStat));
+        if (data.dashboardLabels && typeof data.dashboardLabels === "object") setDashboardLabels(normalizeDashboardLabels(data.dashboardLabels));
         if (typeof data.xp === "number") setXp(clamp(data.xp, 0, 1000000));
         if (data.claimedRewards && typeof data.claimedRewards === "object") setClaimedRewards(data.claimedRewards);
         if (Array.isArray(data.pendingRewards)) setPendingRewards(data.pendingRewards.slice(0, 80).map((r, idx) => ({ id: safeText(r.id || `reward-${idx}`, 120), amount: clamp(r.amount, 1, 5000), reason: safeText(r.reason || "Pending reward", 220) })));
         if (Array.isArray(data.activityLog)) setActivityLog(data.activityLog.slice(0, 20).map(x => safeText(x, 260)));
         if (Array.isArray(data.dailyTasks)) setDailyTasks(data.dailyTasks.slice(0, MAX_TASKS).map(normalizeTask));
+        const savedTab = normalizeTab(data.lastTab || data.tabValue);
+        setTabValue(savedTab || (hasPersonalizedProfile(loadedProfile) ? "missions" : "genesis"));
         setSystemMessage(loadedLegacy ? "Legacy personal OS recovered from this browser. Export a backup from System if you want to preserve it." : "Saved LifeOS state loaded from this browser.");
       }
     } catch (error) {
@@ -295,9 +406,9 @@ export default function LifeOSGenesis() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const payload = { profile, mode, missions, classes, dailyTasks, xp, claimedRewards, pendingRewards, activityLog, savedAt: new Date().toISOString() };
+    const payload = { profile, mode, missions, classes, vaultItems: personalVaultItems, futureQuests: personalFutureQuests, customStats, statConfig: customStats, dashboardLabels, dailyTasks, xp, claimedRewards, pendingRewards, activityLog, lastTab: tabValue, savedAt: new Date().toISOString() };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [hydrated, profile, mode, missions, classes, dailyTasks, xp, claimedRewards, pendingRewards, activityLog]);
+  }, [hydrated, profile, mode, missions, classes, personalVaultItems, personalFutureQuests, customStats, dashboardLabels, dailyTasks, xp, claimedRewards, pendingRewards, activityLog, tabValue]);
 
   const missionScore = useMemo(() => Math.round(missions.reduce((sum, m) => sum + m.progress, 0) / missions.length), [missions]);
   const level = Math.floor(xp / 500) + 1;
@@ -316,6 +427,19 @@ export default function LifeOSGenesis() {
   const supportSystem = Math.round(clamp(25 + (classes.filter(c => String(c.outreach).toLowerCase() !== "not started").length / Math.max(classes.length, 1)) * 60));
   const clarityScore = Math.round(clamp(30 + missionScore * 0.4 + taskCompletion * 0.25));
   const momentum = Math.round(clamp((taskCompletion * 0.45) + (missionScore * 0.35) + Math.min(pendingRewards.length * 5, 20)));
+  const statValues = {
+    setup: setupCompletion,
+    focus: focusPower,
+    energy: energyLevel,
+    support: supportSystem,
+    clarity: clarityScore,
+    momentum,
+    missions: missionScore,
+    tasks: taskCompletion,
+    stability: academicStability,
+    rewards: Math.min(queuedXP, 100),
+  };
+  const displayedStats = customStats.length ? customStats : defaultCustomStats;
 
   const dynamicAchievements = achievements.map(a => {
     if (a.title === "OS Online") return { ...a, unlocked: profile.name !== defaultProfile.name || missions.some(m => m.progress > 50) };
@@ -377,6 +501,7 @@ Use this exact schema:
     "name": "",
     "archetype": "",
     "mainQuest": "",
+    "tagline": "",
     "tone": "",
     "theme": "",
     "currentSeason": ""
@@ -405,9 +530,34 @@ Use this exact schema:
   "stats": [
     {
       "label": "",
-      "value": 0
+      "value": 0,
+      "icon": ""
     }
   ],
+  "vaultItems": [
+    {
+      "title": "",
+      "status": "Optional | Needed | Ready",
+      "icon": "Briefcase | Upload | Target | Mail | Database",
+      "xp": 100
+    }
+  ],
+  "futureQuests": [
+    {
+      "title": "",
+      "type": "",
+      "status": "",
+      "priority": "",
+      "desc": "",
+      "mechanics": ["", "", ""]
+    }
+  ],
+  "dashboardLabels": {
+    "stability": "",
+    "completion": "",
+    "rewards": "",
+    "nextMove": ""
+  },
   "risks": [""],
   "rewardStyle": "",
   "followUpQuestions": [
@@ -521,20 +671,36 @@ Use this exact schema:
       outreach: "Not yet",
       action: m.next || "Define action",
     }, idx));
+    const nextVaultItems = Array.isArray(profileData.vaultItems) && profileData.vaultItems.length
+      ? profileData.vaultItems.slice(0, 30).map(normalizeVaultItem)
+      : defaultVaultItems;
+    const nextFutureQuests = Array.isArray(profileData.futureQuests) && profileData.futureQuests.length
+      ? profileData.futureQuests.slice(0, 20).map(normalizeFutureQuest)
+      : defaultFutureQuests;
+    const nextStats = Array.isArray(profileData.customStats)
+      ? profileData.customStats
+      : Array.isArray(profileData.statConfig)
+        ? profileData.statConfig
+        : profileData.stats;
 
     setMissions(fallbackMissions);
     setDailyTasks(newTasks.length ? newTasks : [normalizeTask({ id: makeId("task"), text: "Choose first concrete action", xp: 50, missionId: fallbackMissions[0]?.id || 1 }, 0)]);
     setClasses(draftClasses);
+    setPersonalVaultItems(nextVaultItems);
+    setPersonalFutureQuests(nextFutureQuests);
+    setCustomStats(Array.isArray(nextStats) && nextStats.length ? nextStats.slice(0, 12).map(normalizeCustomStat) : defaultCustomStats);
+    setDashboardLabels(normalizeDashboardLabels(profileData.dashboardLabels));
     setPendingRewards([]);
     setClaimedRewards({});
-    setProfile({
+    setProfile(normalizeProfile({
       name: safeText(profileData.profile?.name || "New Operator", 80),
       archetype: safeText(profileData.profile?.archetype || "LifeOS User", 120),
       mainQuest: safeText(selectedMainQuest, 160),
+      tagline: safeText(profileData.profile?.tagline || defaultProfile.tagline, 180),
       tone: safeText(selectedTone, 120),
       theme: safeText(selectedTheme, 80),
       currentSeason: safeText(profileData.profile?.currentSeason || "Active Season", 120),
-    });
+    }));
     setActivityLog([
       `OS Genesis complete for ${safeText(profileData.profile?.name || "new profile", 80)}.`,
       `Main Quest set: ${safeText(selectedMainQuest, 160)}`,
@@ -549,6 +715,7 @@ Use this exact schema:
     if (!generatedProfile) return;
     applyGeneratedProfileToOS(generatedProfile, genesisAnswers);
     setGenesisStep(4);
+    setTabValue("missions");
   };
 
   const addTask = () => {
@@ -584,11 +751,17 @@ Use this exact schema:
     mode,
     missions,
     classes,
+    vaultItems: personalVaultItems,
+    futureQuests: personalFutureQuests,
+    customStats,
+    statConfig: customStats,
+    dashboardLabels,
     dailyTasks,
     xp,
     claimedRewards,
     pendingRewards,
     activityLog,
+    lastTab: tabValue,
     savedAt: new Date().toISOString(),
   });
 
@@ -608,15 +781,22 @@ Use this exact schema:
   const importState = () => {
     try {
       const data = JSON.parse(importText);
-      if (data.profile && typeof data.profile === "object") setProfile({ ...defaultProfile, ...data.profile, name: safeText(data.profile.name || defaultProfile.name, 80), archetype: safeText(data.profile.archetype || defaultProfile.archetype, 120), mainQuest: safeText(data.profile.mainQuest || defaultProfile.mainQuest, 160), tone: safeText(data.profile.tone || defaultProfile.tone, 120), theme: safeText(data.profile.theme || defaultProfile.theme, 80), currentSeason: safeText(data.profile.currentSeason || defaultProfile.currentSeason, 120) });
+      if (data.profile && typeof data.profile === "object") setProfile(normalizeProfile(data.profile));
       if (data.mode) setMode(data.mode);
       if (Array.isArray(data.missions)) setMissions(data.missions.slice(0, 30).map(normalizeMission));
       if (Array.isArray(data.classes)) setClasses(data.classes.slice(0, 30).map(normalizeClass));
+      if (Array.isArray(data.vaultItems)) setPersonalVaultItems(data.vaultItems.slice(0, 30).map(normalizeVaultItem));
+      if (Array.isArray(data.futureQuests)) setPersonalFutureQuests(data.futureQuests.slice(0, 20).map(normalizeFutureQuest));
+      const importedStats = Array.isArray(data.customStats) ? data.customStats : data.statConfig;
+      if (Array.isArray(importedStats)) setCustomStats(importedStats.slice(0, 12).map(normalizeCustomStat));
+      if (data.dashboardLabels && typeof data.dashboardLabels === "object") setDashboardLabels(normalizeDashboardLabels(data.dashboardLabels));
       if (Array.isArray(data.dailyTasks)) setDailyTasks(data.dailyTasks.slice(0, MAX_TASKS).map(normalizeTask));
       if (typeof data.xp === "number") setXp(clamp(data.xp, 0, 1000000));
       if (data.claimedRewards && typeof data.claimedRewards === "object") setClaimedRewards(data.claimedRewards);
       if (Array.isArray(data.pendingRewards)) setPendingRewards(data.pendingRewards.slice(0, 80).map((r, idx) => ({ id: safeText(r.id || `reward-${idx}`, 120), amount: clamp(r.amount, 1, 5000), reason: safeText(r.reason || "Pending reward", 220) })));
       if (Array.isArray(data.activityLog)) setActivityLog(data.activityLog.slice(0, 20).map(x => safeText(x, 260)));
+      const importedTab = normalizeTab(data.lastTab || data.tabValue);
+      setTabValue(importedTab || (hasPersonalizedProfile(data.profile) ? "missions" : "genesis"));
       setSystemMessage("Snapshot imported successfully. Data was sanitized before loading.");
     } catch (error) {
       setSystemMessage("Import failed. Check that the pasted JSON is valid.");
@@ -627,6 +807,11 @@ Use this exact schema:
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(LEGACY_STORAGE_KEY);
     setProfile(defaultProfile);
+    setPersonalVaultItems(defaultVaultItems);
+    setPersonalFutureQuests(defaultFutureQuests);
+    setCustomStats(defaultCustomStats);
+    setDashboardLabels(defaultDashboardLabels);
+    setTabValue("genesis");
     setSystemMessage("Local save cleared. Refresh to restart from the privacy-safe starter state.");
   };
 
@@ -683,7 +868,7 @@ Use this exact schema:
               <Badge className={`${t.danger} border`}>PRIVACY-FIRST</Badge>
             </div>
             <h1 className="text-4xl md:text-6xl font-black tracking-tight">LifeOS: Genesis</h1>
-            <p className={`mt-2 text-lg ${t.muted}`}>Dump the chaos. Build the command center.</p>
+            <p className={`mt-2 text-lg ${t.muted}`}>{profile.tagline || defaultProfile.tagline}</p>
             <div className="mt-3 space-y-1">
               <TerminalLine t={t}>load profile_stack --mode=personalized_ops</TerminalLine>
               <TerminalLine t={t}>priority: missions, momentum, evidence, next_action</TerminalLine>
@@ -711,16 +896,16 @@ Use this exact schema:
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
-            { label: "Life Stability", value: academicStability, suffix: "%", icon: Shield, note: `${lowRiskClasses}/${classes.length} areas low risk` },
-            { label: "Daily Completion", value: taskCompletion, suffix: "%", icon: CheckCircle2, note: `${completedTasks}/${dailyTasks.length} tasks done` },
-            { label: "Reward Queue", value: queuedXP, suffix: " XP", icon: BatteryCharging, note: `${pendingRewards.length} claims waiting` },
-            { label: "Next Move", value: "", suffix: "", icon: Crosshair, note: nextTask },
+            { label: dashboardLabels.stability, value: academicStability, suffix: "%", icon: Shield, note: `${lowRiskClasses}/${classes.length} areas low risk` },
+            { label: dashboardLabels.completion, value: taskCompletion, suffix: "%", icon: CheckCircle2, note: `${completedTasks}/${dailyTasks.length} tasks done` },
+            { label: dashboardLabels.rewards, value: queuedXP, suffix: " XP", icon: BatteryCharging, note: `${pendingRewards.length} claims waiting` },
+            { label: dashboardLabels.nextMove, value: "", suffix: "", icon: Crosshair, note: nextTask },
           ].map(({ label, value, suffix, icon: Icon, note }) => (
             <Card key={label} className={`${t.card} rounded-2xl`}>
               <CardContent className="p-4 space-y-2">
                 <div className={`flex items-center gap-2 text-xs uppercase tracking-widest ${t.dim}`}><Icon className="h-4 w-4" />{label}</div>
-                {label === "Next Move" ? <div className={`text-sm font-bold leading-snug ${t.text}`}>{note}</div> : <div className="text-3xl font-black">{formatNumber(value)}{suffix}</div>}
-                {label !== "Next Move" && <p className={`text-xs ${t.muted}`}>{note}</p>}
+                {suffix === "" ? <div className={`text-sm font-bold leading-snug ${t.text}`}>{note}</div> : <div className="text-3xl font-black">{formatNumber(value)}{suffix}</div>}
+                {suffix !== "" && <p className={`text-xs ${t.muted}`}>{note}</p>}
               </CardContent>
             </Card>
           ))}
@@ -734,6 +919,7 @@ Use this exact schema:
                 <h2 className={`text-2xl font-bold mt-1 ${t.text}`}>{profile.name}</h2>
                 <p className={`text-sm ${t.muted}`}>Class: {profile.archetype}</p>
                 <p className={`text-sm ${t.muted}`}>Main Quest: {profile.mainQuest}</p>
+                <p className={`text-sm ${t.muted}`}>Tagline: {profile.tagline}</p>
                 <p className={`text-sm ${t.muted}`}>Season: {profile.currentSeason}</p>
               </div>
               <div className={`rounded-2xl border p-4 ${t.inner}`}>
@@ -744,21 +930,20 @@ Use this exact schema:
                 <Progress value={missionScore} t={t} pulse={missionScore < 50} />
               </div>
               <div className="space-y-3">
-                <StatBar label="Setup" value={setupCompletion} icon={Sparkles} t={t} />
-                <StatBar label="Focus" value={focusPower} icon={Target} t={t} />
-                <StatBar label="Energy" value={energyLevel} icon={BatteryCharging} t={t} />
-                <StatBar label="Support" value={supportSystem} icon={Heart} t={t} />
-                <StatBar label="Clarity" value={clarityScore} icon={Brain} t={t} />
-                <StatBar label="Momentum" value={momentum} icon={Zap} t={t} />
+                {displayedStats.map((stat) => {
+                  const Icon = iconMap[stat.icon] || Activity;
+                  const value = stat.value ?? statValues[stat.source] ?? 0;
+                  return <StatBar key={`${stat.label}-${stat.source}`} label={stat.label} value={value} icon={Icon} t={t} />;
+                })}
               </div>
             </CardContent>
           </Card>
 
           <div className="lg:col-span-3">
-            <Tabs value={tabValue} onValueChange={setTabValue} className="w-full">
-              <TabsList className={`${t.card} rounded-2xl p-1 flex flex-wrap h-auto`}>
+            <Tabs value={tabValue} onValueChange={(nextTab) => setTabValue(normalizeTab(nextTab) || "missions")} className="w-full">
+              <TabsList className={`${t.card} rounded-2xl p-2 flex flex-wrap gap-2 h-auto`}>
                 <TabsTrigger value="missions"><Crosshair className="h-4 w-4 mr-1" />Missions</TabsTrigger>
-                <TabsTrigger value="gpa"><GraduationCap className="h-4 w-4 mr-1" />Areas</TabsTrigger>
+                <TabsTrigger value="areas"><GraduationCap className="h-4 w-4 mr-1" />Areas</TabsTrigger>
                 <TabsTrigger value="pathways"><Lock className="h-4 w-4 mr-1" />Pathways</TabsTrigger>
                 <TabsTrigger value="vault"><Database className="h-4 w-4 mr-1" />Vault</TabsTrigger>
                 <TabsTrigger value="daily"><Terminal className="h-4 w-4 mr-1" />Daily</TabsTrigger>
@@ -776,7 +961,7 @@ Use this exact schema:
                 </div>
               </TabsContent>
 
-              <TabsContent value="gpa" className="mt-5">
+              <TabsContent value="areas" className="mt-5">
                 <Card className={`${t.card} rounded-2xl`}>
                   <CardContent className="p-4 overflow-x-auto">
                     <div className="flex items-center gap-2 mb-4"><AlertTriangle className="text-amber-400" /><h2 className={`text-xl font-bold ${t.text}`}>Life Areas / Risk Table</h2></div>
@@ -829,15 +1014,17 @@ Use this exact schema:
 
               <TabsContent value="vault" className="mt-5">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {vaultItems.map(({ title, status, icon: Icon, xp }) => (
+                  {personalVaultItems.map(({ title, status, icon, xp }) => {
+                    const Icon = iconMap[icon] || Database;
+                    return (
                     <Card key={title} className={`${t.card} rounded-2xl`}>
                       <CardContent className="p-5 space-y-3">
                         <Icon className={`h-7 w-7 ${t.accent}`} />
                         <h3 className={`font-bold ${t.text}`}>{title}</h3>
-                        <div className="flex items-center justify-between"><Badge className={status === "Ready" ? t.ok : t.danger}>{status}</Badge><span className={`text-xs ${t.dim}`}>{xp} XP</span></div>
+                        <div className="flex items-center justify-between"><Badge className={status === "Ready" ? t.ok : status === "Optional" ? t.warn : t.danger}>{status}</Badge><span className={`text-xs ${t.dim}`}>{formatNumber(xp)} XP</span></div>
                       </CardContent>
                     </Card>
-                  ))}
+                  );})}
                 </div>
               </TabsContent>
 
@@ -1027,7 +1214,7 @@ Use this exact schema:
 
               <TabsContent value="future" className="mt-5">
                 <div className="grid grid-cols-1 gap-4">
-                  {futureQuests.map(q => (
+                  {personalFutureQuests.map(q => (
                     <Card key={q.title} className={`${t.card} rounded-2xl`}>
                       <CardContent className="p-5 space-y-4">
                         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">

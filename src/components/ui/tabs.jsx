@@ -41,7 +41,13 @@ const TabsTrigger = React.forwardRef(({ value, className = "", children, ...prop
       role="tab"
       aria-selected={selected}
       data-state={selected ? "active" : "inactive"}
-      className={className}
+      className={[
+        "inline-flex min-h-10 items-center justify-center rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300",
+        selected
+          ? "border-emerald-300 bg-emerald-300 text-black shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(16,185,129,0.28)] ring-2 ring-emerald-300/45"
+          : "border-current/20 bg-transparent text-current opacity-80 hover:opacity-100 hover:bg-current/10",
+        className
+      ].join(" ")}
       onClick={() => context?.setValue(value)}
       {...props}
     >
