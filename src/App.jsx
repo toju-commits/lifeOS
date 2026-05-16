@@ -32,6 +32,7 @@ import {
   Database,
   ScrollText,
   Plus,
+  Users,
   X,
   Sparkles,
 } from "lucide-react";
@@ -67,6 +68,7 @@ const iconMap = {
   Terminal,
   Trophy,
   Upload,
+  Users,
   Zap,
 };
 
@@ -170,7 +172,7 @@ const normalizeTask = (task, idx = 0) => ({
   id: task?.id || `seed-task-${idx}-${slugText(task?.text)}`,
   text: safeText(task?.text || "Untitled task"),
   done: Boolean(task?.done),
-  xp: clamp(task?.xp ?? 50, 5, 1000),
+  xp: Math.round(clamp(task?.xp ?? 50, 5, 1000)),
   missionId: task?.missionId ?? null,
   classId: task?.classId ?? null,
 });
@@ -182,7 +184,7 @@ const normalizeMission = (mission, idx = 0) => ({
   urgency: safeText(mission?.urgency || "Medium", 40),
   difficulty: safeText(mission?.difficulty || "Medium", 40),
   progress: clamp(mission?.progress ?? 0),
-  xp: clamp(mission?.xp ?? 100, 10, 5000),
+  xp: Math.round(clamp(mission?.xp ?? 100, 10, 5000)),
   next: safeText(mission?.next || "Define next action", 180),
   reward: safeText(mission?.reward || "+Progress", 120),
   streak: clamp(mission?.streak ?? 0, 0, 999),
@@ -220,7 +222,7 @@ const normalizeCustomStat = (stat, idx = 0) => ({
   label: safeText(stat?.label || `Stat ${idx + 1}`, 80),
   source: safeText(stat?.source || stat?.key || slugText(stat?.label || `stat-${idx}`), 40),
   value: stat?.value === undefined ? undefined : Math.round(clamp(stat.value)),
-  icon: safeText(stat?.icon || "Activity", 40),
+  icon: iconMap[safeText(stat?.icon, 40)] ? safeText(stat?.icon, 40) : "Sparkles",
 });
 
 const normalizeDashboardLabels = (labels = {}) => ({
@@ -229,6 +231,21 @@ const normalizeDashboardLabels = (labels = {}) => ({
     Object.entries(labels || {}).map(([key, value]) => [key, safeText(value, 80)])
   ),
 });
+
+const isKeepMainQuestAnswer = (answer) => {
+  const text = safeText(answer, 120).toLowerCase();
+  if (!text) return false;
+  return (
+    text === "yes" ||
+    text.startsWith("yes,") ||
+    text.includes("keep it") ||
+    text.includes("keep this") ||
+    text.includes("keep exactly") ||
+    text.includes("exactly like this") ||
+    text.includes("looks good") ||
+    text.includes("use this")
+  );
+};
 
 const achievements = [
   { title: "Genesis Started", desc: "Opened the LifeOS setup flow", unlocked: true },
@@ -272,6 +289,112 @@ const theme = {
     warn: "bg-amber-100 text-amber-800 border-amber-200",
     ok: "bg-emerald-100 text-emerald-800 border-emerald-200",
   },
+};
+
+const themePackOverrides = {
+  "soft wellness": {
+    dark: {
+      page: "bg-[#17211b] text-[#fff7ed]",
+      card: "bg-[#24352d]/88 border-[#f7c8d6]/35 text-[#fff7ed] shadow-[0_18px_45px_rgba(20,83,45,0.16)] backdrop-blur-xl",
+      inner: "bg-[#f8f1df]/10 border-[#f7c8d6]/25 text-[#fff7ed]",
+      text: "text-[#fff7ed]",
+      muted: "text-[#f8e8cf]",
+      dim: "text-[#d9c7ad]",
+      input: "bg-[#fff7ed]/10 border-[#f7c8d6]/35 text-[#fff7ed] placeholder:text-[#f8e8cf]/70",
+      grid: "soft-wellness-grid",
+      glow: "from-mint-300 via-emerald-200 to-rose-200",
+      accent: "text-rose-200",
+      button: "bg-[#f7c8d6] text-[#253327] hover:bg-[#f3b6c9]",
+      danger: "bg-rose-300/18 text-rose-100 border-rose-200/35",
+      warn: "bg-amber-200/18 text-amber-100 border-amber-100/35",
+      ok: "bg-emerald-200/18 text-emerald-100 border-emerald-100/35",
+      terminal: false,
+    },
+    light: {
+      page: "bg-[#fbf6ec] text-[#253327]",
+      card: "bg-white/78 border-[#d9b8a8]/35 shadow-[0_18px_45px_rgba(127,95,74,0.13)] backdrop-blur-xl",
+      inner: "bg-[#f4ead8]/80 border-[#d9b8a8]/35",
+      text: "text-[#253327]",
+      muted: "text-[#5f6d5f]",
+      dim: "text-[#8a7a68]",
+      input: "bg-white/85 border-[#d9b8a8]/40 text-[#253327] placeholder:text-[#8a7a68]",
+      grid: "soft-wellness-grid",
+      glow: "from-emerald-300 via-mint-200 to-rose-200",
+      accent: "text-[#b86f7f]",
+      button: "bg-[#486653] text-[#fff7ed] hover:bg-[#3c5947]",
+      danger: "bg-rose-100 text-rose-800 border-rose-200",
+      warn: "bg-amber-100 text-amber-800 border-amber-200",
+      ok: "bg-emerald-100 text-emerald-800 border-emerald-200",
+      terminal: false,
+    },
+  },
+  "clean professional": {
+    dark: {
+      page: "bg-slate-950 text-slate-50",
+      card: "bg-slate-900/88 border-slate-700/70 text-slate-50 shadow-[0_18px_45px_rgba(15,23,42,0.25)] backdrop-blur-xl",
+      inner: "bg-slate-800/70 border-slate-700/70 text-slate-50",
+      text: "text-slate-50",
+      muted: "text-slate-300",
+      dim: "text-slate-400",
+      input: "bg-slate-950/80 border-slate-600/70 text-slate-50 placeholder:text-slate-500",
+      grid: "professional-grid-dark",
+      glow: "from-sky-400 via-cyan-300 to-emerald-300",
+      accent: "text-sky-300",
+      button: "bg-sky-300 text-slate-950 hover:bg-sky-200",
+      danger: "bg-red-500/14 text-red-200 border-red-400/30",
+      warn: "bg-amber-500/14 text-amber-200 border-amber-400/30",
+      ok: "bg-sky-500/14 text-sky-200 border-sky-400/30",
+      terminal: false,
+    },
+    light: {
+      page: "bg-slate-50 text-slate-950",
+      card: "bg-white/86 border-slate-200 shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur-xl",
+      inner: "bg-slate-100/80 border-slate-200",
+      text: "text-slate-950",
+      muted: "text-slate-700",
+      dim: "text-slate-500",
+      input: "bg-white border-slate-300 text-slate-950 placeholder:text-slate-400",
+      grid: "professional-grid-light",
+      glow: "from-sky-600 via-cyan-600 to-emerald-600",
+      accent: "text-sky-700",
+      button: "bg-slate-950 text-white hover:bg-slate-800",
+      danger: "bg-red-50 text-red-800 border-red-200",
+      warn: "bg-amber-50 text-amber-800 border-amber-200",
+      ok: "bg-sky-50 text-sky-800 border-sky-200",
+      terminal: false,
+    },
+  },
+  "luxury minimal": {
+    dark: { page: "bg-[#11100d] text-[#f7f0df]", card: "bg-[#1d1a14]/90 border-[#c8aa6a]/35 text-[#f7f0df] shadow-[0_18px_45px_rgba(0,0,0,0.25)] backdrop-blur-xl", inner: "bg-[#2a2418]/75 border-[#c8aa6a]/30", text: "text-[#f7f0df]", muted: "text-[#d8c8a5]", dim: "text-[#a79776]", input: "bg-[#11100d]/80 border-[#c8aa6a]/35 text-[#f7f0df]", grid: "minimal-grid-dark", glow: "from-[#c8aa6a] via-[#eee2bd] to-[#9ca3af]", accent: "text-[#d8b86c]", button: "bg-[#d8b86c] text-black hover:bg-[#eed28d]", danger: "bg-red-500/14 text-red-200 border-red-400/30", warn: "bg-[#c8aa6a]/15 text-[#f7e5b2] border-[#c8aa6a]/35", ok: "bg-[#d8b86c]/15 text-[#f7e5b2] border-[#d8b86c]/35", terminal: false },
+    light: { page: "bg-[#f7f3ea] text-[#191713]", card: "bg-white/82 border-[#d8c29a]/45 shadow-[0_18px_45px_rgba(64,50,28,0.10)] backdrop-blur-xl", inner: "bg-[#f1eadb]/85 border-[#d8c29a]/45", text: "text-[#191713]", muted: "text-[#5d5444]", dim: "text-[#85765e]", input: "bg-white/85 border-[#d8c29a]/50 text-[#191713]", grid: "minimal-grid-light", glow: "from-[#9b7a32] via-[#d8b86c] to-[#64748b]", accent: "text-[#8b6a22]", button: "bg-[#191713] text-[#f7f3ea] hover:bg-[#2b261d]", danger: "bg-red-50 text-red-800 border-red-200", warn: "bg-amber-50 text-amber-800 border-amber-200", ok: "bg-stone-100 text-stone-800 border-stone-200", terminal: false },
+  },
+  "dark fantasy": {
+    dark: { page: "bg-[#0d0712] text-[#f5e8ff]", card: "bg-[#180f20]/90 border-fuchsia-300/35 text-[#f5e8ff] shadow-[0_0_35px_rgba(168,85,247,0.18)] backdrop-blur-xl", inner: "bg-[#281337]/65 border-fuchsia-300/30", text: "text-[#f5e8ff]", muted: "text-purple-100", dim: "text-purple-200/75", input: "bg-black/60 border-fuchsia-300/35 text-[#f5e8ff]", grid: "fantasy-grid-dark", glow: "from-fuchsia-400 via-violet-300 to-rose-300", accent: "text-fuchsia-300", button: "bg-fuchsia-300 text-black hover:bg-fuchsia-200", danger: "bg-rose-500/16 text-rose-200 border-rose-300/30", warn: "bg-violet-500/16 text-violet-100 border-violet-300/30", ok: "bg-fuchsia-500/16 text-fuchsia-100 border-fuchsia-300/30" },
+    light: { page: "bg-[#f7efff] text-[#24112f]", card: "bg-white/82 border-violet-200 shadow-[0_18px_45px_rgba(88,28,135,0.12)] backdrop-blur-xl", inner: "bg-violet-50/80 border-violet-200", text: "text-[#24112f]", muted: "text-violet-900/75", dim: "text-violet-800/55", input: "bg-white/85 border-violet-200 text-[#24112f]", grid: "fantasy-grid-light", glow: "from-fuchsia-600 via-violet-600 to-rose-500", accent: "text-violet-700", button: "bg-violet-950 text-violet-50 hover:bg-violet-800", danger: "bg-rose-50 text-rose-800 border-rose-200", warn: "bg-violet-50 text-violet-800 border-violet-200", ok: "bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200" },
+  },
+  "anime hero": {
+    dark: { page: "bg-[#06111f] text-cyan-50", card: "bg-[#0a1b30]/88 border-cyan-300/35 text-cyan-50 shadow-[0_0_35px_rgba(34,211,238,0.18)] backdrop-blur-xl", inner: "bg-cyan-950/45 border-cyan-300/30", text: "text-cyan-50", muted: "text-cyan-100", dim: "text-cyan-200/75", input: "bg-[#06111f]/80 border-cyan-300/40 text-cyan-50", grid: "hero-grid-dark", glow: "from-cyan-300 via-sky-300 to-amber-200", accent: "text-cyan-300", button: "bg-cyan-300 text-slate-950 hover:bg-cyan-200", danger: "bg-rose-500/16 text-rose-200 border-rose-300/30", warn: "bg-amber-500/16 text-amber-200 border-amber-300/30", ok: "bg-cyan-500/16 text-cyan-100 border-cyan-300/30" },
+    light: { page: "bg-[#eef8ff] text-[#102033]", card: "bg-white/82 border-sky-200 shadow-[0_18px_45px_rgba(14,116,144,0.10)] backdrop-blur-xl", inner: "bg-sky-50/85 border-sky-200", text: "text-[#102033]", muted: "text-sky-950/75", dim: "text-sky-900/55", input: "bg-white/85 border-sky-200 text-[#102033]", grid: "hero-grid-light", glow: "from-cyan-600 via-sky-500 to-amber-400", accent: "text-sky-700", button: "bg-sky-950 text-white hover:bg-sky-800", danger: "bg-rose-50 text-rose-800 border-rose-200", warn: "bg-amber-50 text-amber-800 border-amber-200", ok: "bg-sky-50 text-sky-800 border-sky-200" },
+  },
+  "calm dark mode": {
+    dark: { page: "bg-[#0f1720] text-slate-100", card: "bg-[#17212e]/88 border-slate-600/45 text-slate-100 shadow-[0_18px_45px_rgba(2,6,23,0.20)] backdrop-blur-xl", inner: "bg-slate-800/60 border-slate-600/45", text: "text-slate-100", muted: "text-slate-300", dim: "text-slate-400", input: "bg-slate-950/50 border-slate-600/60 text-slate-100", grid: "professional-grid-dark", glow: "from-teal-300 via-slate-300 to-sky-300", accent: "text-teal-300", button: "bg-teal-300 text-slate-950 hover:bg-teal-200", danger: "bg-red-500/14 text-red-200 border-red-400/30", warn: "bg-amber-500/14 text-amber-200 border-amber-400/30", ok: "bg-teal-500/14 text-teal-200 border-teal-400/30", terminal: false },
+    light: null,
+  },
+  "minimal light mode": {
+    dark: null,
+    light: { page: "bg-white text-slate-950", card: "bg-white border-slate-200 shadow-[0_10px_35px_rgba(15,23,42,0.06)]", inner: "bg-slate-50 border-slate-200", text: "text-slate-950", muted: "text-slate-700", dim: "text-slate-500", input: "bg-white border-slate-300 text-slate-950", grid: "minimal-grid-light", glow: "from-slate-700 via-slate-500 to-slate-400", accent: "text-slate-700", button: "bg-slate-950 text-white hover:bg-slate-800", danger: "bg-red-50 text-red-800 border-red-200", warn: "bg-amber-50 text-amber-800 border-amber-200", ok: "bg-slate-100 text-slate-800 border-slate-200", terminal: false },
+  },
+  "cozy home": {
+    dark: { page: "bg-[#211813] text-[#fff4e6]", card: "bg-[#2d211a]/90 border-orange-200/25 text-[#fff4e6] shadow-[0_18px_45px_rgba(67,20,7,0.18)] backdrop-blur-xl", inner: "bg-[#3a2a21]/75 border-orange-200/25", text: "text-[#fff4e6]", muted: "text-[#f5d9ba]", dim: "text-[#caa989]", input: "bg-[#211813]/75 border-orange-200/30 text-[#fff4e6]", grid: "cozy-grid-dark", glow: "from-orange-200 via-amber-200 to-emerald-200", accent: "text-amber-200", button: "bg-amber-200 text-[#211813] hover:bg-amber-100", danger: "bg-rose-500/14 text-rose-200 border-rose-300/30", warn: "bg-amber-500/16 text-amber-100 border-amber-200/30", ok: "bg-emerald-500/14 text-emerald-100 border-emerald-300/30", terminal: false },
+    light: { page: "bg-[#fff7ed] text-[#2b2119]", card: "bg-white/78 border-orange-200/70 shadow-[0_18px_45px_rgba(124,45,18,0.10)] backdrop-blur-xl", inner: "bg-orange-50/80 border-orange-200/70", text: "text-[#2b2119]", muted: "text-[#6f5743]", dim: "text-[#967b63]", input: "bg-white/85 border-orange-200 text-[#2b2119]", grid: "cozy-grid-light", glow: "from-orange-400 via-amber-300 to-emerald-300", accent: "text-orange-700", button: "bg-[#2b2119] text-[#fff7ed] hover:bg-[#463629]", danger: "bg-rose-50 text-rose-800 border-rose-200", warn: "bg-amber-50 text-amber-800 border-amber-200", ok: "bg-emerald-50 text-emerald-800 border-emerald-200", terminal: false },
+  },
+};
+
+const getThemePack = (profileTheme = "Hacker", mode = "dark") => {
+  const requested = safeText(profileTheme || "Hacker", 100).toLowerCase();
+  const key = Object.keys(themePackOverrides).find((name) => requested.includes(name));
+  const override = key ? themePackOverrides[key]?.[mode] : null;
+  return { ...theme[mode], ...(override || {}) };
 };
 
 function Progress({ value, t, pulse = false }) {
@@ -341,7 +464,7 @@ export default function LifeOSGenesis() {
   const [mode, setMode] = useState("dark");
   const [profile, setProfile] = useState(defaultProfile);
   const [tabValue, setTabValue] = useState("genesis");
-  const t = theme[mode];
+  const t = getThemePack(profile.theme, mode);
   const [missions, setMissions] = useState(initialMissions);
   const [classes, setClasses] = useState(initialClasses);
   const [personalVaultItems, setPersonalVaultItems] = useState(defaultVaultItems);
@@ -385,12 +508,12 @@ export default function LifeOSGenesis() {
         if (Array.isArray(data.classes)) setClasses(data.classes.slice(0, 30).map(normalizeClass));
         if (Array.isArray(data.vaultItems)) setPersonalVaultItems(data.vaultItems.slice(0, 30).map(normalizeVaultItem));
         if (Array.isArray(data.futureQuests)) setPersonalFutureQuests(data.futureQuests.slice(0, 20).map(normalizeFutureQuest));
-        const savedStats = Array.isArray(data.customStats) ? data.customStats : data.statConfig;
+        const savedStats = Array.isArray(data.customStats) ? data.customStats : Array.isArray(data.statConfig) ? data.statConfig : data.stats;
         if (Array.isArray(savedStats)) setCustomStats(savedStats.slice(0, 12).map(normalizeCustomStat));
         if (data.dashboardLabels && typeof data.dashboardLabels === "object") setDashboardLabels(normalizeDashboardLabels(data.dashboardLabels));
         if (typeof data.xp === "number") setXp(clamp(data.xp, 0, 1000000));
         if (data.claimedRewards && typeof data.claimedRewards === "object") setClaimedRewards(data.claimedRewards);
-        if (Array.isArray(data.pendingRewards)) setPendingRewards(data.pendingRewards.slice(0, 80).map((r, idx) => ({ id: safeText(r.id || `reward-${idx}`, 120), amount: clamp(r.amount, 1, 5000), reason: safeText(r.reason || "Pending reward", 220) })));
+        if (Array.isArray(data.pendingRewards)) setPendingRewards(data.pendingRewards.slice(0, 80).map((r, idx) => ({ id: safeText(r.id || `reward-${idx}`, 120), amount: Math.round(clamp(r.amount, 1, 5000)), reason: safeText(r.reason || "Pending reward", 220) })));
         if (Array.isArray(data.activityLog)) setActivityLog(data.activityLog.slice(0, 20).map(x => safeText(x, 260)));
         if (Array.isArray(data.dailyTasks)) setDailyTasks(data.dailyTasks.slice(0, MAX_TASKS).map(normalizeTask));
         const savedTab = normalizeTab(data.lastTab || data.tabValue);
@@ -440,6 +563,12 @@ export default function LifeOSGenesis() {
     rewards: Math.min(queuedXP, 100),
   };
   const displayedStats = customStats.length ? customStats : defaultCustomStats;
+  const profileStatValue = customStats.find((stat) => typeof stat.value === "number")?.value;
+  const isPersonalized = hasPersonalizedProfile(profile);
+  const dashboardStability = isPersonalized ? Math.round(clamp(profileStatValue ?? missionScore)) : academicStability;
+  const dashboardStabilityNote = isPersonalized
+    ? (profileStatValue === undefined ? "Based on active missions" : "From custom profile stats")
+    : `${lowRiskClasses}/${classes.length} areas low risk`;
 
   const dynamicAchievements = achievements.map(a => {
     if (a.title === "OS Online") return { ...a, unlocked: profile.name !== defaultProfile.name || missions.some(m => m.progress > 50) };
@@ -618,7 +747,7 @@ Use this exact schema:
         question: `Your AI thinks your main quest is: "${safeText(profileData.profile?.mainQuest || "Stabilize and level up", 120)}". How should we frame it?`,
         options: [profileData.profile?.mainQuest || "Stabilize and level up", "Make it more career-focused", "Make it more school-focused", "Make it more health-focused", "Custom"],
       },
-      { id: "theme_choice", question: "Pick your OS aesthetic:", options: ["Hacker", "Luxury Minimal", "Soft Wellness", "Anime Hero", "Dark Fantasy", "Clean Professional", "Custom"] },
+      { id: "theme_choice", question: "Pick your OS aesthetic:", options: ["Hacker", "Soft Wellness", "Clean Professional", "Luxury Minimal", "Dark Fantasy", "Anime Hero", "Calm Dark Mode", "Minimal Light Mode", "Cozy Home", "Custom"] },
       { id: "coach_style", question: "How should your OS talk when you're falling behind?", options: ["Gentle", "Direct", "Roast me lightly", "Coach mode", "Faith-based encouragement", "Custom"] },
     ];
   };
@@ -637,7 +766,13 @@ Use this exact schema:
   };
 
   const applyGeneratedProfileToOS = (profileData, answers = {}) => {
-    const selectedMainQuest = answers.main_quest_check_custom || answers.main_quest_check || profileData.profile?.mainQuest || "Stabilize and level up";
+    const originalMainQuest = profileData.profile?.mainQuest || "Stabilize and level up";
+    const mainQuestAnswer = answers.main_quest_check_custom || answers.main_quest_check || "";
+    const selectedMainQuest = answers.main_quest_check_custom
+      ? answers.main_quest_check_custom
+      : isKeepMainQuestAnswer(mainQuestAnswer)
+        ? originalMainQuest
+        : mainQuestAnswer || originalMainQuest;
     const selectedTheme = answers.theme_choice_custom || answers.theme_choice || profileData.profile?.theme || "Hacker";
     const selectedTone = answers.coach_style_custom || answers.coach_style || profileData.profile?.tone || "Direct";
 
@@ -702,12 +837,13 @@ Use this exact schema:
       currentSeason: safeText(profileData.profile?.currentSeason || "Active Season", 120),
     }));
     setActivityLog([
+      "+100 XP  Genesis Launch Bonus",
       `OS Genesis complete for ${safeText(profileData.profile?.name || "new profile", 80)}.`,
       `Main Quest set: ${safeText(selectedMainQuest, 160)}`,
       `Theme selected: ${safeText(selectedTheme, 80)}`,
       `Coach style selected: ${safeText(selectedTone, 80)}`,
     ]);
-    setXp(0);
+    setXp(prev => Math.max(prev, 100));
     setSystemMessage(`Genesis applied. ${safeText(profileData.profile?.name || "Profile", 80)} OS launched successfully.`);
   };
 
@@ -787,13 +923,13 @@ Use this exact schema:
       if (Array.isArray(data.classes)) setClasses(data.classes.slice(0, 30).map(normalizeClass));
       if (Array.isArray(data.vaultItems)) setPersonalVaultItems(data.vaultItems.slice(0, 30).map(normalizeVaultItem));
       if (Array.isArray(data.futureQuests)) setPersonalFutureQuests(data.futureQuests.slice(0, 20).map(normalizeFutureQuest));
-      const importedStats = Array.isArray(data.customStats) ? data.customStats : data.statConfig;
+      const importedStats = Array.isArray(data.customStats) ? data.customStats : Array.isArray(data.statConfig) ? data.statConfig : data.stats;
       if (Array.isArray(importedStats)) setCustomStats(importedStats.slice(0, 12).map(normalizeCustomStat));
       if (data.dashboardLabels && typeof data.dashboardLabels === "object") setDashboardLabels(normalizeDashboardLabels(data.dashboardLabels));
       if (Array.isArray(data.dailyTasks)) setDailyTasks(data.dailyTasks.slice(0, MAX_TASKS).map(normalizeTask));
       if (typeof data.xp === "number") setXp(clamp(data.xp, 0, 1000000));
       if (data.claimedRewards && typeof data.claimedRewards === "object") setClaimedRewards(data.claimedRewards);
-      if (Array.isArray(data.pendingRewards)) setPendingRewards(data.pendingRewards.slice(0, 80).map((r, idx) => ({ id: safeText(r.id || `reward-${idx}`, 120), amount: clamp(r.amount, 1, 5000), reason: safeText(r.reason || "Pending reward", 220) })));
+      if (Array.isArray(data.pendingRewards)) setPendingRewards(data.pendingRewards.slice(0, 80).map((r, idx) => ({ id: safeText(r.id || `reward-${idx}`, 120), amount: Math.round(clamp(r.amount, 1, 5000)), reason: safeText(r.reason || "Pending reward", 220) })));
       if (Array.isArray(data.activityLog)) setActivityLog(data.activityLog.slice(0, 20).map(x => safeText(x, 260)));
       const importedTab = normalizeTab(data.lastTab || data.tabValue);
       setTabValue(importedTab || (hasPersonalizedProfile(data.profile) ? "missions" : "genesis"));
@@ -834,6 +970,34 @@ Use this exact schema:
             linear-gradient(90deg, rgba(4,120,87,.08) 1px, transparent 1px);
           background-size: 100% 100%, 100% 100%, 34px 34px, 34px 34px;
         }
+        .soft-wellness-grid {
+          background-image:
+            radial-gradient(circle at 12% 8%, rgba(244,114,182,.16), transparent 30%),
+            radial-gradient(circle at 88% 18%, rgba(110,231,183,.16), transparent 32%);
+          background-size: 100% 100%, 100% 100%;
+        }
+        .professional-grid-dark {
+          background-image:
+            linear-gradient(rgba(148,163,184,.06) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(148,163,184,.06) 1px, transparent 1px);
+          background-size: 48px 48px;
+        }
+        .professional-grid-light {
+          background-image:
+            linear-gradient(rgba(15,23,42,.045) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(15,23,42,.045) 1px, transparent 1px);
+          background-size: 48px 48px;
+        }
+        .minimal-grid-dark, .minimal-grid-light {
+          background-image: linear-gradient(rgba(120,113,108,.045) 1px, transparent 1px);
+          background-size: 100% 40px;
+        }
+        .fantasy-grid-dark, .fantasy-grid-light, .hero-grid-dark, .hero-grid-light, .cozy-grid-dark, .cozy-grid-light {
+          background-image:
+            radial-gradient(circle at 18% 12%, rgba(255,255,255,.10), transparent 28%),
+            radial-gradient(circle at 85% 16%, rgba(255,255,255,.08), transparent 30%);
+          background-size: 100% 100%, 100% 100%;
+        }
         .scanlines:before {
           content: "";
           position: absolute;
@@ -843,7 +1007,7 @@ Use this exact schema:
           mix-blend-mode: overlay;
         }
       `}</style>
-      <div className="absolute inset-0 scanlines pointer-events-none" />
+      {t.terminal !== false && <div className="absolute inset-0 scanlines pointer-events-none" />}
       <AnimatePresence>
         {xpPop && (
           <motion.div
@@ -863,16 +1027,16 @@ Use this exact schema:
           <div>
             <div className="flex flex-wrap items-center gap-3 mb-2">
               <Shield className={`h-8 w-8 ${t.accent}`} />
-              <Badge className={`${t.ok} border`}>GENESIS MODE</Badge>
-              <Badge className={`${t.warn} border`}>LOCAL PROTOTYPE</Badge>
-              <Badge className={`${t.danger} border`}>PRIVACY-FIRST</Badge>
+              <Badge className={`${t.ok} border`}>{isPersonalized ? "OS ONLINE" : "GENESIS MODE"}</Badge>
+              <Badge className={`${t.warn} border`}>{isPersonalized ? "LOCAL SAVE" : "LOCAL PROTOTYPE"}</Badge>
+              <Badge className={`${t.danger} border`}>{isPersonalized ? "PRIVATE BROWSER" : "PRIVACY-FIRST"}</Badge>
             </div>
             <h1 className="text-4xl md:text-6xl font-black tracking-tight">LifeOS: Genesis</h1>
             <p className={`mt-2 text-lg ${t.muted}`}>{profile.tagline || defaultProfile.tagline}</p>
-            <div className="mt-3 space-y-1">
+            {t.terminal !== false && <div className="mt-3 space-y-1">
               <TerminalLine t={t}>load profile_stack --mode=personalized_ops</TerminalLine>
               <TerminalLine t={t}>priority: missions, momentum, evidence, next_action</TerminalLine>
-            </div>
+            </div>}
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
             <Button onClick={() => setMode(mode === "dark" ? "light" : "dark")} className={t.button}>
@@ -896,7 +1060,7 @@ Use this exact schema:
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
-            { label: dashboardLabels.stability, value: academicStability, suffix: "%", icon: Shield, note: `${lowRiskClasses}/${classes.length} areas low risk` },
+            { label: dashboardLabels.stability, value: dashboardStability, suffix: "%", icon: Shield, note: dashboardStabilityNote },
             { label: dashboardLabels.completion, value: taskCompletion, suffix: "%", icon: CheckCircle2, note: `${completedTasks}/${dailyTasks.length} tasks done` },
             { label: dashboardLabels.rewards, value: queuedXP, suffix: " XP", icon: BatteryCharging, note: `${pendingRewards.length} claims waiting` },
             { label: dashboardLabels.nextMove, value: "", suffix: "", icon: Crosshair, note: nextTask },
@@ -931,7 +1095,7 @@ Use this exact schema:
               </div>
               <div className="space-y-3">
                 {displayedStats.map((stat) => {
-                  const Icon = iconMap[stat.icon] || Activity;
+                  const Icon = iconMap[stat.icon] || Sparkles;
                   const value = stat.value ?? statValues[stat.source] ?? 0;
                   return <StatBar key={`${stat.label}-${stat.source}`} label={stat.label} value={value} icon={Icon} t={t} />;
                 })}
