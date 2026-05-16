@@ -1713,6 +1713,12 @@ ${sharedInstructions}`;
                       <div className={`rounded-xl border p-3 text-xs ${t.inner}`}>
                         <strong>Security note:</strong> this prototype stores data only in this browser's localStorage. Do not store passwords, private keys, SSNs, or sensitive financial/medical details here. Exported JSON backups are plain text.
                       </div>
+                      <div className={`rounded-xl border p-3 text-xs space-y-2 ${t.inner}`}>
+                        <strong>Install LifeOS:</strong>
+                        <p>Chrome/Edge desktop: open the address bar install icon or browser menu, then choose Install app.</p>
+                        <p>iPhone/iPad: open in Safari, tap Share, then Add to Home Screen.</p>
+                        <p>Android: open the browser menu, then tap Install app or Add to Home screen.</p>
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <Button className={t.button} onClick={exportState}>Export Backup</Button>
                         <Button className={t.button} onClick={importState}>Import Snapshot</Button>

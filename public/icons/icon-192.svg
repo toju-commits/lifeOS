@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="LifeOS icon">
+  <rect width="192" height="192" rx="42" fill="#050807"/>
+  <path d="M96 27 151 50v39c0 35-22 61-55 76-33-15-55-41-55-76V50l55-23Z" fill="#10b981" opacity=".18"/>
+  <path d="M96 36 142 56v33c0 29-17 50-46 64-29-14-46-35-46-64V56l46-20Z" fill="none" stroke="#6ee7b7" stroke-width="9" stroke-linejoin="round"/>
+  <path d="M70 100h52M70 80h52M70 119h33" stroke="#ecfdf5" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="131" cy="119" r="10" fill="#a3e635"/>
+</svg>
