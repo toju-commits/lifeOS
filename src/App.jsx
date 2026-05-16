@@ -500,6 +500,7 @@ export default function LifeOSGenesis() {
   const [dailyInput, setDailyInput] = useState("");
   const [genesisStep, setGenesisStep] = useState(1);
   const [genesisLoading, setGenesisLoading] = useState(false);
+  const [genesisMode, setGenesisMode] = useState("known");
   const [mirrorJsonInput, setMirrorJsonInput] = useState("");
   const [generatedProfile, setGeneratedProfile] = useState(null);
   const [genesisQuestions, setGenesisQuestions] = useState([]);
@@ -701,17 +702,7 @@ export default function LifeOSGenesis() {
 
   const updateClass = (id, field, value) => setClasses(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
 
-  const buildLifeMirrorPrompt = () => `You are helping create a personalized gamified Life Operating System.
-
-Based on what you know about me, generate a deeply personalized Life OS Profile for an app. The app turns my life into missions, tasks, XP, stats, rewards, and next actions.
-
-Do not be generic. Use my actual personality, responsibilities, goals, stressors, struggles, habits, interests, relationships, health/fitness goals, school/work situation, and long-term dreams.
-
-Return ONLY valid JSON. Do not wrap it in markdown. Do not add explanations.
-
-Use this exact schema:
-
-{
+  const lifeMirrorJsonSchema = `{
   "profile": {
     "name": "",
     "archetype": "",
@@ -793,6 +784,38 @@ Use this exact schema:
     }
   ]
 }`;
+
+  const buildLifeMirrorPrompt = () => {
+    const sharedInstructions = `The app turns a life profile into missions, tasks, XP, stats, rewards, vault items, future quests, risks, dashboard labels, and next actions.
+
+Return ONLY valid JSON when you generate the final profile. Do not wrap it in markdown. Do not add explanations to the final JSON.
+
+Keep this exact JSON schema and include tagline, customStats/stats, vaultItems, futureQuests, dashboardLabels, risks, rewardStyle, and followUpQuestions:
+
+${lifeMirrorJsonSchema}`;
+
+    if (genesisMode === "cold") {
+      return `You are helping create a personalized gamified Life Operating System.
+
+Cold Start Mode: you do not know me yet.
+
+First, ask me exactly 10 onboarding questions that will give you enough context to build a useful LifeOS. Ask about my current season, responsibilities, goals, stressors, routines, energy, relationships/support, work or school, health, style preferences, and what would make this system feel personal.
+
+After I answer all 10 questions, generate the LifeOS JSON using my answers. Do not generate the JSON until after I answer.
+
+${sharedInstructions}`;
+    }
+
+    return `You are helping create a personalized gamified Life Operating System.
+
+Known Profile Mode: use what you already know about me.
+
+Based on what you know about me, generate a deeply personalized Life OS Profile for an app.
+
+Do not be generic. Use my actual personality, responsibilities, goals, stressors, struggles, habits, interests, relationships, health/fitness goals, school/work situation, and long-term dreams.
+
+${sharedInstructions}`;
+  };
 
   const copyLifeMirrorPrompt = async () => {
     try {
@@ -1375,17 +1398,36 @@ Use this exact schema:
                   <CardContent className="p-5 space-y-5">
                     <div>
                       <h2 className={`text-2xl font-black flex items-center gap-2 ${t.text}`}><Sparkles className={t.accent} />OS Genesis</h2>
-                      <p className={`text-sm ${t.muted}`}>Use a personal AI to mirror someone's life, then import the structured profile here.</p>
+                      <p className={`text-sm ${t.muted}`}>Use a personal AI to mirror someone's life, then import the structured profile here. If the profile feels generic, use Cold Start Mode.</p>
                     </div>
 
                     {genesisStep === 1 && (
                       <div className="space-y-4">
                         <div className={`rounded-2xl border p-4 ${t.inner}`}>
                           <h3 className={`font-bold ${t.text}`}>Step 1 — Generate Life Mirror</h3>
-                          <p className={`text-sm mt-2 ${t.muted}`}>Paste this prompt into ChatGPT, Claude, Gemini, or whichever AI knows the person best. Then bring the JSON back here.</p>
+                          <p className={`text-sm mt-2 ${t.muted}`}>Choose a setup mode, paste the prompt into ChatGPT, Claude, Gemini, or another AI, then bring the JSON back here.</p>
                         </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setGenesisMode("known")}
+                            className={`rounded-2xl border p-4 text-left transition ${genesisMode === "known" ? "border-emerald-300 ring-2 ring-emerald-300/40" : "border-current/20"} ${t.inner}`}
+                          >
+                            <div className={`font-bold ${t.text}`}>Mode 1: My AI knows me</div>
+                            <p className={`mt-1 text-sm ${t.muted}`}>Uses the existing Life Mirror prompt and tells the AI to use what it already knows about the user.</p>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setGenesisMode("cold")}
+                            className={`rounded-2xl border p-4 text-left transition ${genesisMode === "cold" ? "border-emerald-300 ring-2 ring-emerald-300/40" : "border-current/20"} ${t.inner}`}
+                          >
+                            <div className={`font-bold ${t.text}`}>Mode 2: My AI does not know me yet</div>
+                            <p className={`mt-1 text-sm ${t.muted}`}>Cold Start Mode asks 10 onboarding questions first, then generates the LifeOS JSON after the answers.</p>
+                          </button>
+                        </div>
+                        <p className={`text-sm font-semibold ${t.accent}`}>If the profile feels generic, use Cold Start Mode.</p>
                         <div className="flex gap-3 flex-wrap">
-                          <Button className={t.button} onClick={copyLifeMirrorPrompt}>{mirrorPromptCopied ? "Prompt Copied" : "Copy Life Mirror Prompt"}</Button>
+                          <Button className={t.button} onClick={copyLifeMirrorPrompt}>{mirrorPromptCopied ? "Prompt Copied" : genesisMode === "cold" ? "Copy Cold Start Prompt" : "Copy Life Mirror Prompt"}</Button>
                           <Button variant="outline" className="border-current bg-transparent" onClick={() => setGenesisStep(2)}>Go to Import</Button>
                         </div>
                         <textarea readOnly value={buildLifeMirrorPrompt()} className={`min-h-[260px] w-full rounded-2xl border p-3 font-mono text-xs ${t.input}`} />
