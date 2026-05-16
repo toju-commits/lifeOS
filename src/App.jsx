@@ -118,6 +118,7 @@ const systemRoadmap = [
 
 const STORAGE_KEY = "lifeos-profile-v1";
 const LEGACY_STORAGE_KEY = "joshuaos-war-room-v1";
+const PROFILE_INDEX_KEY = "lifeos-profiles-v1";
 
 const defaultProfile = {
   name: "New Operator",
@@ -230,6 +231,31 @@ const normalizeDashboardLabels = (labels = {}) => ({
   ...Object.fromEntries(
     Object.entries(labels || {}).map(([key, value]) => [key, safeText(value, 80)])
   ),
+});
+
+const makeProfileId = () => `profile-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const getProfileSlotName = (snapshot = {}) => safeText(snapshot.profile?.name || "New Profile", 80) || "New Profile";
+const createStarterSnapshot = () => ({
+  profile: defaultProfile,
+  mode: "dark",
+  missions: initialMissions,
+  classes: initialClasses,
+  vaultItems: defaultVaultItems,
+  futureQuests: defaultFutureQuests,
+  customStats: defaultCustomStats,
+  statConfig: defaultCustomStats,
+  dashboardLabels: defaultDashboardLabels,
+  dailyTasks: [
+    { id: "task-open-genesis", text: "Open Genesis and create/import a personalized profile", done: false, xp: 80, missionId: 1, classId: null },
+    { id: "task-pick-priorities", text: "Pick three priorities for this week", done: false, xp: 60, missionId: 2, classId: null },
+    { id: "task-complete-first-action", text: "Complete one concrete action today", done: false, xp: 50, missionId: 3, classId: null },
+  ],
+  xp: 0,
+  claimedRewards: {},
+  pendingRewards: [],
+  activityLog: [],
+  lastTab: "genesis",
+  savedAt: new Date().toISOString(),
 });
 
 const isKeepMainQuestAnswer = (answer) => {
@@ -487,51 +513,111 @@ export default function LifeOSGenesis() {
   const [importText, setImportText] = useState("");
   const [systemMessage, setSystemMessage] = useState("Autosave armed. Local browser storage active.");
   const [hydrated, setHydrated] = useState(false);
+  const [activeProfileId, setActiveProfileId] = useState("");
+  const [profileIndex, setProfileIndex] = useState({ activeProfileId: "", profiles: [] });
   const [dailyTasks, setDailyTasks] = useState([
     { id: "task-open-genesis", text: "Open Genesis and create/import a personalized profile", done: false, xp: 80, missionId: 1, classId: null },
     { id: "task-pick-priorities", text: "Pick three priorities for this week", done: false, xp: 60, missionId: 2, classId: null },
     { id: "task-complete-first-action", text: "Complete one concrete action today", done: false, xp: 50, missionId: 3, classId: null },
   ]);
 
+  const buildSnapshot = () => ({
+    profile,
+    mode,
+    missions,
+    classes,
+    vaultItems: personalVaultItems,
+    futureQuests: personalFutureQuests,
+    customStats,
+    statConfig: customStats,
+    dashboardLabels,
+    dailyTasks,
+    xp,
+    claimedRewards,
+    pendingRewards,
+    activityLog,
+    lastTab: tabValue,
+    savedAt: new Date().toISOString(),
+  });
+
+  const applySnapshot = (data = {}, forceGenesis = false) => {
+    const loadedProfile = normalizeProfile(data.profile || {});
+    setProfile(loadedProfile);
+    setMode(data.mode || "dark");
+    setMissions(Array.isArray(data.missions) ? data.missions.slice(0, 30).map(normalizeMission) : initialMissions);
+    setClasses(Array.isArray(data.classes) ? data.classes.slice(0, 30).map(normalizeClass) : initialClasses);
+    setPersonalVaultItems(Array.isArray(data.vaultItems) ? data.vaultItems.slice(0, 30).map(normalizeVaultItem) : defaultVaultItems);
+    setPersonalFutureQuests(Array.isArray(data.futureQuests) ? data.futureQuests.slice(0, 20).map(normalizeFutureQuest) : defaultFutureQuests);
+    const savedStats = Array.isArray(data.customStats) ? data.customStats : Array.isArray(data.statConfig) ? data.statConfig : data.stats;
+    setCustomStats(Array.isArray(savedStats) ? savedStats.slice(0, 12).map(normalizeCustomStat) : defaultCustomStats);
+    setDashboardLabels(data.dashboardLabels && typeof data.dashboardLabels === "object" ? normalizeDashboardLabels(data.dashboardLabels) : defaultDashboardLabels);
+    setDailyTasks(Array.isArray(data.dailyTasks) ? data.dailyTasks.slice(0, MAX_TASKS).map(normalizeTask) : createStarterSnapshot().dailyTasks);
+    setXp(typeof data.xp === "number" ? Math.round(clamp(data.xp, 0, 1000000)) : 0);
+    setClaimedRewards(data.claimedRewards && typeof data.claimedRewards === "object" ? data.claimedRewards : {});
+    setPendingRewards(Array.isArray(data.pendingRewards) ? data.pendingRewards.slice(0, 80).map((r, idx) => ({ id: safeText(r.id || `reward-${idx}`, 120), amount: Math.round(clamp(r.amount, 1, 5000)), reason: safeText(r.reason || "Pending reward", 220) })) : []);
+    setActivityLog(Array.isArray(data.activityLog) ? data.activityLog.slice(0, 20).map(x => safeText(x, 260)) : []);
+    const savedTab = normalizeTab(data.lastTab || data.tabValue);
+    setTabValue(forceGenesis ? "genesis" : savedTab || (hasPersonalizedProfile(loadedProfile) ? "missions" : "genesis"));
+  };
+
   useEffect(() => {
     try {
+      const savedProfiles = localStorage.getItem(PROFILE_INDEX_KEY);
+      if (savedProfiles) {
+        const parsedIndex = JSON.parse(savedProfiles);
+        const profiles = Array.isArray(parsedIndex.profiles) ? parsedIndex.profiles.filter(slot => slot?.id && slot?.data) : [];
+        if (profiles.length) {
+          const nextActiveId = profiles.some(slot => slot.id === parsedIndex.activeProfileId) ? parsedIndex.activeProfileId : profiles[0].id;
+          const activeSlot = profiles.find(slot => slot.id === nextActiveId) || profiles[0];
+          setProfileIndex({ activeProfileId: nextActiveId, profiles });
+          setActiveProfileId(nextActiveId);
+          applySnapshot(activeSlot.data);
+          setSystemMessage("Local profile loaded from this browser.");
+          return;
+        }
+      }
+
       const primarySave = localStorage.getItem(STORAGE_KEY);
       const legacySave = localStorage.getItem(LEGACY_STORAGE_KEY);
       const saved = primarySave || legacySave;
       const loadedLegacy = !primarySave && Boolean(legacySave);
+      const migratedId = makeProfileId();
       if (saved) {
         const data = JSON.parse(saved);
-        const loadedProfile = normalizeProfile(data.profile || {});
-        setProfile(loadedProfile);
-        if (data.mode) setMode(data.mode);
-        if (Array.isArray(data.missions)) setMissions(data.missions.slice(0, 30).map(normalizeMission));
-        if (Array.isArray(data.classes)) setClasses(data.classes.slice(0, 30).map(normalizeClass));
-        if (Array.isArray(data.vaultItems)) setPersonalVaultItems(data.vaultItems.slice(0, 30).map(normalizeVaultItem));
-        if (Array.isArray(data.futureQuests)) setPersonalFutureQuests(data.futureQuests.slice(0, 20).map(normalizeFutureQuest));
-        const savedStats = Array.isArray(data.customStats) ? data.customStats : Array.isArray(data.statConfig) ? data.statConfig : data.stats;
-        if (Array.isArray(savedStats)) setCustomStats(savedStats.slice(0, 12).map(normalizeCustomStat));
-        if (data.dashboardLabels && typeof data.dashboardLabels === "object") setDashboardLabels(normalizeDashboardLabels(data.dashboardLabels));
-        if (typeof data.xp === "number") setXp(clamp(data.xp, 0, 1000000));
-        if (data.claimedRewards && typeof data.claimedRewards === "object") setClaimedRewards(data.claimedRewards);
-        if (Array.isArray(data.pendingRewards)) setPendingRewards(data.pendingRewards.slice(0, 80).map((r, idx) => ({ id: safeText(r.id || `reward-${idx}`, 120), amount: Math.round(clamp(r.amount, 1, 5000)), reason: safeText(r.reason || "Pending reward", 220) })));
-        if (Array.isArray(data.activityLog)) setActivityLog(data.activityLog.slice(0, 20).map(x => safeText(x, 260)));
-        if (Array.isArray(data.dailyTasks)) setDailyTasks(data.dailyTasks.slice(0, MAX_TASKS).map(normalizeTask));
-        const savedTab = normalizeTab(data.lastTab || data.tabValue);
-        setTabValue(savedTab || (hasPersonalizedProfile(loadedProfile) ? "missions" : "genesis"));
+        const migratedSlot = { id: migratedId, name: getProfileSlotName(data), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), data };
+        setProfileIndex({ activeProfileId: migratedId, profiles: [migratedSlot] });
+        setActiveProfileId(migratedId);
+        applySnapshot(data);
         setSystemMessage(loadedLegacy ? "Legacy personal OS recovered from this browser. Export a backup from System if you want to preserve it." : "Saved LifeOS state loaded from this browser.");
+      } else {
+        const starter = createStarterSnapshot();
+        const starterSlot = { id: migratedId, name: "New Profile", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), data: starter };
+        setProfileIndex({ activeProfileId: migratedId, profiles: [starterSlot] });
+        setActiveProfileId(migratedId);
+        applySnapshot(starter, true);
       }
     } catch (error) {
       setSystemMessage("Could not load saved state. Fresh session started.");
+      const fallbackId = makeProfileId();
+      const starter = createStarterSnapshot();
+      setProfileIndex({ activeProfileId: fallbackId, profiles: [{ id: fallbackId, name: "New Profile", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), data: starter }] });
+      setActiveProfileId(fallbackId);
+      applySnapshot(starter, true);
     } finally {
       setHydrated(true);
     }
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
-    const payload = { profile, mode, missions, classes, vaultItems: personalVaultItems, futureQuests: personalFutureQuests, customStats, statConfig: customStats, dashboardLabels, dailyTasks, xp, claimedRewards, pendingRewards, activityLog, lastTab: tabValue, savedAt: new Date().toISOString() };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [hydrated, profile, mode, missions, classes, personalVaultItems, personalFutureQuests, customStats, dashboardLabels, dailyTasks, xp, claimedRewards, pendingRewards, activityLog, tabValue]);
+    if (!hydrated || !activeProfileId) return;
+    const snapshot = buildSnapshot();
+    const now = new Date().toISOString();
+    const profiles = profileIndex.profiles.length ? profileIndex.profiles : [{ id: activeProfileId, name: getProfileSlotName(snapshot), createdAt: now, updatedAt: now, data: snapshot }];
+    const nextProfiles = profiles.map(slot => slot.id === activeProfileId ? { ...slot, name: getProfileSlotName(snapshot), updatedAt: now, data: snapshot } : slot);
+    const nextIndex = { activeProfileId, profiles: nextProfiles };
+    setProfileIndex(nextIndex);
+    localStorage.setItem(PROFILE_INDEX_KEY, JSON.stringify(nextIndex));
+  }, [hydrated, activeProfileId, profile, mode, missions, classes, personalVaultItems, personalFutureQuests, customStats, dashboardLabels, dailyTasks, xp, claimedRewards, pendingRewards, activityLog, tabValue]);
 
   const missionScore = useMemo(() => Math.round(missions.reduce((sum, m) => sum + m.progress, 0) / missions.length), [missions]);
   const level = Math.floor(xp / 500) + 1;
@@ -882,24 +968,71 @@ Use this exact schema:
     setDailyTasks(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const buildSnapshot = () => ({
-    profile,
-    mode,
-    missions,
-    classes,
-    vaultItems: personalVaultItems,
-    futureQuests: personalFutureQuests,
-    customStats,
-    statConfig: customStats,
-    dashboardLabels,
-    dailyTasks,
-    xp,
-    claimedRewards,
-    pendingRewards,
-    activityLog,
-    lastTab: tabValue,
-    savedAt: new Date().toISOString(),
-  });
+  const switchProfile = (profileId) => {
+    const slot = profileIndex.profiles.find(item => item.id === profileId);
+    if (!slot) return;
+    setActiveProfileId(profileId);
+    applySnapshot(slot.data);
+    setSystemMessage(`Switched to ${slot.name}.`);
+  };
+
+  const createNewProfile = () => {
+    const snapshot = createStarterSnapshot();
+    const id = makeProfileId();
+    const now = new Date().toISOString();
+    const slot = { id, name: "New Profile", createdAt: now, updatedAt: now, data: snapshot };
+    const nextIndex = { activeProfileId: id, profiles: [...profileIndex.profiles, slot] };
+    setProfileIndex(nextIndex);
+    setActiveProfileId(id);
+    localStorage.setItem(PROFILE_INDEX_KEY, JSON.stringify(nextIndex));
+    applySnapshot(snapshot, true);
+    setGenesisStep(1);
+    setSystemMessage("New local profile created. Start in Genesis.");
+  };
+
+  const duplicateCurrentProfile = () => {
+    const snapshot = { ...buildSnapshot(), lastTab: tabValue };
+    const id = makeProfileId();
+    const now = new Date().toISOString();
+    const slot = { id, name: `${getProfileSlotName(snapshot)} Copy`, createdAt: now, updatedAt: now, data: snapshot };
+    const nextIndex = { activeProfileId: id, profiles: [...profileIndex.profiles, slot] };
+    setProfileIndex(nextIndex);
+    setActiveProfileId(id);
+    localStorage.setItem(PROFILE_INDEX_KEY, JSON.stringify(nextIndex));
+    applySnapshot(snapshot);
+    setSystemMessage("Current profile duplicated locally.");
+  };
+
+  const exportCurrentProfile = () => {
+    exportState();
+  };
+
+  const deleteCurrentProfile = () => {
+    const activeSlot = profileIndex.profiles.find(slot => slot.id === activeProfileId);
+    const label = activeSlot?.name || "this profile";
+    if (!window.confirm(`Delete "${label}" from this browser? This cannot be undone unless you exported a backup.`)) return;
+    const remaining = profileIndex.profiles.filter(slot => slot.id !== activeProfileId);
+    if (!remaining.length) {
+      const snapshot = createStarterSnapshot();
+      const id = makeProfileId();
+      const now = new Date().toISOString();
+      const slot = { id, name: "New Profile", createdAt: now, updatedAt: now, data: snapshot };
+      const nextIndex = { activeProfileId: id, profiles: [slot] };
+      setProfileIndex(nextIndex);
+      setActiveProfileId(id);
+      localStorage.setItem(PROFILE_INDEX_KEY, JSON.stringify(nextIndex));
+      applySnapshot(snapshot, true);
+      setSystemMessage("Profile deleted. A fresh Genesis profile was created.");
+      return;
+    }
+    const nextActive = remaining[0];
+    const nextIndex = { activeProfileId: nextActive.id, profiles: remaining };
+    setProfileIndex(nextIndex);
+    setActiveProfileId(nextActive.id);
+    localStorage.setItem(PROFILE_INDEX_KEY, JSON.stringify(nextIndex));
+    applySnapshot(nextActive.data);
+    setSystemMessage(`Profile deleted. Switched to ${nextActive.name}.`);
+  };
 
   const exportState = () => {
     const snapshot = JSON.stringify(buildSnapshot(), null, 2);
@@ -941,14 +1074,9 @@ Use this exact schema:
 
   const resetLocalSave = () => {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
-    setProfile(defaultProfile);
-    setPersonalVaultItems(defaultVaultItems);
-    setPersonalFutureQuests(defaultFutureQuests);
-    setCustomStats(defaultCustomStats);
-    setDashboardLabels(defaultDashboardLabels);
-    setTabValue("genesis");
-    setSystemMessage("Local save cleared. Refresh to restart from the privacy-safe starter state.");
+    const snapshot = createStarterSnapshot();
+    applySnapshot(snapshot, true);
+    setSystemMessage("Current profile reset to the privacy-safe starter state. Legacy recovery data was left untouched.");
   };
 
   return (
@@ -1038,7 +1166,28 @@ Use this exact schema:
               <TerminalLine t={t}>priority: missions, momentum, evidence, next_action</TerminalLine>
             </div>}
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col gap-3">
+            <Card className={`${t.card} rounded-2xl min-w-[280px]`}>
+              <CardContent className="p-3 space-y-3">
+                <div className={`text-xs uppercase tracking-widest ${t.dim}`}>Local Profiles</div>
+                <select
+                  value={activeProfileId}
+                  onChange={(event) => switchProfile(event.target.value)}
+                  className={`w-full rounded-xl border px-3 py-2 text-sm ${t.input}`}
+                  aria-label="Switch local profile"
+                >
+                  {profileIndex.profiles.map(slot => (
+                    <option key={slot.id} value={slot.id}>{slot.name}</option>
+                  ))}
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" className={t.button} onClick={createNewProfile}>New Profile</Button>
+                  <Button size="sm" variant="outline" className="border-current bg-transparent" onClick={duplicateCurrentProfile}>Duplicate</Button>
+                  <Button size="sm" variant="outline" className="border-current bg-transparent" onClick={exportCurrentProfile}>Export</Button>
+                  <Button size="sm" variant="outline" className="border-current bg-transparent" onClick={deleteCurrentProfile}>Delete</Button>
+                </div>
+              </CardContent>
+            </Card>
             <Button onClick={() => setMode(mode === "dark" ? "light" : "dark")} className={t.button}>
               {mode === "dark" ? <Sun className="h-4 w-4 mr-2" /> : <Moon className="h-4 w-4 mr-2" />}
               {mode === "dark" ? "Light Mode" : "Dark Mode"}
