@@ -106,6 +106,18 @@ const defaultDashboardLabels = {
   nextMove: "Next Move",
 };
 
+const supportedThemes = [
+  "Hacker",
+  "Soft Wellness",
+  "Clean Professional",
+  "Luxury Minimal",
+  "Dark Fantasy",
+  "Anime Hero",
+  "Calm Dark Mode",
+  "Minimal Light Mode",
+  "Cozy Home",
+];
+
 const systemRoadmap = [
   { title: "localStorage persistence", status: "Implemented", detail: "State survives refresh on the same browser/device. No cloud account yet." },
   { title: "Import / export JSON", status: "Implemented", detail: "Backup/restore full OS snapshots with sanitized JSON import." },
@@ -484,6 +496,49 @@ function MissionCard({ mission, updateProgress, completeMission, t }) {
   );
 }
 
+function EditableMissionCard({ mission, updateMission, deleteMission, updateProgress, completeMission, t }) {
+  const urgencyStyle = mission.urgency === "Critical" ? t.danger : mission.urgency === "High" ? t.warn : t.ok;
+  return (
+    <motion.div layout initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
+      <Card className={`${t.card} rounded-2xl overflow-hidden relative`}>
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-300 to-transparent opacity-70" />
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 space-y-2">
+              <Input value={mission.title} onChange={e => updateMission(mission.id, "title", e.target.value)} className={`${t.input} font-bold`} aria-label="Mission title" />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Input value={mission.area} onChange={e => updateMission(mission.id, "area", e.target.value)} className={t.input} aria-label="Mission area" />
+                <select value={mission.difficulty} onChange={e => updateMission(mission.id, "difficulty", e.target.value)} className={`rounded-md border px-3 py-2 text-sm ${t.input}`} aria-label="Mission difficulty">
+                  {["Easy", "Medium", "Hard"].map(item => <option key={item} value={item}>{item}</option>)}
+                </select>
+                <Input type="number" value={mission.xp} onChange={e => updateMission(mission.id, "xp", e.target.value)} className={t.input} aria-label="Mission XP" />
+              </div>
+            </div>
+            <select value={mission.urgency} onChange={e => updateMission(mission.id, "urgency", e.target.value)} className={`rounded-full border px-3 py-1 text-xs font-semibold ${urgencyStyle}`} aria-label="Mission urgency">
+              {["Low", "Medium", "High", "Critical"].map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </div>
+          <div>
+            <div className={`flex justify-between text-xs ${t.muted} mb-1`}><span>Progress</span><span>{displayPercent(mission.progress)}%</span></div>
+            <Progress value={mission.progress} t={t} pulse={mission.urgency === "Critical"} />
+          </div>
+          <Input value={mission.next} onChange={e => updateMission(mission.id, "next", e.target.value)} className={t.input} aria-label="Mission next action" />
+          <Input value={mission.reward} onChange={e => updateMission(mission.id, "reward", e.target.value)} className={t.input} aria-label="Mission reward" />
+          <div className="flex items-center justify-between pt-1">
+            <div className={`flex items-center gap-1 text-xs ${t.muted}`}><Flame className="h-3.5 w-3.5" /> Streak: {mission.streak}</div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" className="border-current bg-transparent" onClick={() => updateProgress(mission.id, -10)}>-10</Button>
+              <Button size="sm" className={t.button} onClick={() => updateProgress(mission.id, 10)}>+10</Button>
+              <Button size="sm" className="bg-lime-400 text-black hover:bg-lime-300" onClick={() => completeMission(mission.id)}>Done</Button>
+              <Button size="sm" variant="outline" className="border-current bg-transparent" onClick={() => deleteMission(mission.id)}>Delete</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
 function TerminalLine({ children, t }) {
   return <div className={`font-mono text-xs ${t.muted}`}><span className={t.accent}>root@lifeos:~$</span> {children}</div>;
 }
@@ -689,6 +744,38 @@ export default function LifeOSGenesis() {
 
   const updateProgress = (id, delta) => {
     setMissions(prev => prev.map(m => m.id === id ? { ...m, progress: Math.max(0, Math.min(100, m.progress + delta)) } : m));
+  };
+
+  const updateProfileField = (field, value) => {
+    setProfile(prev => normalizeProfile({ ...prev, [field]: value }));
+  };
+
+  const updateMission = (id, field, value) => {
+    setMissions(prev => prev.map((mission, idx) => mission.id === id ? normalizeMission({ ...mission, [field]: value }, idx) : mission));
+  };
+
+  const addMission = () => {
+    const nextId = missions.reduce((max, mission) => Math.max(max, Number(mission.id) || 0), 0) + 1;
+    setMissions(prev => [
+      ...prev,
+      normalizeMission({
+        id: nextId,
+        title: "New Mission",
+        area: "Life",
+        urgency: "Medium",
+        difficulty: "Medium",
+        progress: 0,
+        xp: 250,
+        next: "Define the next action",
+        reward: "+Progress",
+        streak: 0,
+      }, prev.length),
+    ]);
+  };
+
+  const deleteMission = (id) => {
+    setMissions(prev => prev.filter(mission => mission.id !== id));
+    setDailyTasks(prev => prev.map(task => task.missionId === id ? { ...task, missionId: null } : task));
   };
 
   const syncMissionFromTask = (task, direction = 1) => {
@@ -971,6 +1058,10 @@ ${sharedInstructions}`;
     if (!dailyInput.trim()) return;
     setDailyTasks(prev => [...prev, { id: makeId("task"), text: safeText(dailyInput), done: false, xp: 50, missionId: 1, classId: null }].slice(0, MAX_TASKS));
     setDailyInput("");
+  };
+
+  const updateTask = (idx, field, value) => {
+    setDailyTasks(prev => prev.map((task, i) => i === idx ? normalizeTask({ ...task, [field]: value }, i) : task));
   };
 
   const toggleTask = (idx) => {
@@ -1256,11 +1347,16 @@ ${sharedInstructions}`;
             <CardContent className="p-5 space-y-5">
               <div>
                 <p className={`text-xs uppercase tracking-widest ${t.dim}`}>Character Sheet</p>
-                <h2 className={`text-2xl font-bold mt-1 ${t.text}`}>{profile.name}</h2>
-                <p className={`text-sm ${t.muted}`}>Class: {profile.archetype}</p>
-                <p className={`text-sm ${t.muted}`}>Main Quest: {profile.mainQuest}</p>
-                <p className={`text-sm ${t.muted}`}>Tagline: {profile.tagline}</p>
-                <p className={`text-sm ${t.muted}`}>Season: {profile.currentSeason}</p>
+                <div className="mt-2 space-y-2">
+                  <Input value={profile.name} onChange={e => updateProfileField("name", e.target.value)} className={`${t.input} text-lg font-bold`} aria-label="Profile name" />
+                  <Input value={profile.archetype} onChange={e => updateProfileField("archetype", e.target.value)} className={t.input} aria-label="Profile archetype" />
+                  <Input value={profile.mainQuest} onChange={e => updateProfileField("mainQuest", e.target.value)} className={t.input} aria-label="Profile main quest" />
+                  <Input value={profile.tagline} onChange={e => updateProfileField("tagline", e.target.value)} className={t.input} aria-label="Profile tagline" />
+                  <Input value={profile.currentSeason} onChange={e => updateProfileField("currentSeason", e.target.value)} className={t.input} aria-label="Profile current season" />
+                  <select value={profile.theme} onChange={e => updateProfileField("theme", e.target.value)} className={`w-full rounded-md border px-3 py-2 text-sm ${t.input}`} aria-label="Profile theme">
+                    {supportedThemes.map(item => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </div>
               </div>
               <div className={`rounded-2xl border p-4 ${t.inner}`}>
                 <div className="flex items-center justify-between mb-3">
@@ -1297,8 +1393,11 @@ ${sharedInstructions}`;
               </TabsList>
 
               <TabsContent value="missions" className="mt-5">
+                <div className="mb-4 flex justify-end">
+                  <Button className={t.button} onClick={addMission}><Plus className="h-4 w-4 mr-1" />Add Mission</Button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  <AnimatePresence>{missions.map(m => <MissionCard key={m.id} mission={m} updateProgress={updateProgress} completeMission={completeMission} t={t} />)}</AnimatePresence>
+                  <AnimatePresence>{missions.map(m => <EditableMissionCard key={m.id} mission={m} updateMission={updateMission} deleteMission={deleteMission} updateProgress={updateProgress} completeMission={completeMission} t={t} />)}</AnimatePresence>
                 </div>
               </TabsContent>
 
@@ -1382,13 +1481,17 @@ ${sharedInstructions}`;
                     </div>
                     <div className="space-y-2">
                       {dailyTasks.map((task, idx) => (
-                        <motion.div layout key={task.id || `${task.text}-${idx}`} className={`flex items-center justify-between border rounded-xl p-3 ${task.done ? "opacity-60 line-through" : ""} ${t.inner}`}>
-                          <button onClick={() => toggleTask(idx)} className="flex items-center gap-3 text-left">
-                            <span className={`h-5 w-5 rounded-md border flex items-center justify-center ${task.done ? "bg-emerald-400 text-black" : "border-emerald-400/40"}`}>{task.done ? "✓" : ""}</span>
-                            <span>{task.text}</span>
-                          </button>
+                        <motion.div layout key={task.id || `${task.text}-${idx}`} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 border rounded-xl p-3 ${task.done ? "opacity-60" : ""} ${t.inner}`}>
+                          <div className="flex flex-1 items-center gap-3">
+                            <button onClick={() => toggleTask(idx)} className={`h-5 w-5 rounded-md border flex shrink-0 items-center justify-center ${task.done ? "bg-emerald-400 text-black" : "border-emerald-400/40"}`} aria-label="Toggle task done">{task.done ? "✓" : ""}</button>
+                            <Input value={task.text} onChange={e => updateTask(idx, "text", e.target.value)} className={`${t.input} ${task.done ? "line-through" : ""}`} aria-label="Task text" />
+                          </div>
                           <div className="flex items-center gap-2">
-                            <span className={`text-xs ${t.dim}`}>{task.xp} XP{task.missionId ? ` • M${task.missionId}` : ""}</span>
+                            <Input type="number" value={task.xp} onChange={e => updateTask(idx, "xp", e.target.value)} className={`${t.input} w-24`} aria-label="Task XP" />
+                            <select value={task.missionId ?? ""} onChange={e => updateTask(idx, "missionId", e.target.value ? Number(e.target.value) : null)} className={`rounded-md border px-2 py-2 text-xs ${t.input}`} aria-label="Linked mission">
+                              <option value="">No mission</option>
+                              {missions.map(mission => <option key={mission.id} value={mission.id}>M{mission.id}</option>)}
+                            </select>
                             <Button size="sm" variant="ghost" onClick={() => removeTask(idx)}><X className="h-4 w-4" /></Button>
                           </div>
                         </motion.div>
