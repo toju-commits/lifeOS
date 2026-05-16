@@ -91,12 +91,12 @@ const defaultFutureQuests = [
 ];
 
 const defaultCustomStats = [
-  { label: "Setup", source: "setup", icon: "Sparkles" },
-  { label: "Focus", source: "focus", icon: "Target" },
-  { label: "Energy", source: "energy", icon: "BatteryCharging" },
-  { label: "Support", source: "support", icon: "Heart" },
-  { label: "Clarity", source: "clarity", icon: "Brain" },
-  { label: "Momentum", source: "momentum", icon: "Zap" },
+  { label: "Setup", source: "setup", icon: "Sparkles", reason: "Based on whether Genesis profile is complete." },
+  { label: "Focus", source: "focus", icon: "Target", reason: "Based on average mission progress." },
+  { label: "Energy", source: "energy", icon: "BatteryCharging", reason: "Based on daily task completion and health/rest tasks." },
+  { label: "Support", source: "support", icon: "Heart", reason: "Based on support/outreach-related areas." },
+  { label: "Clarity", source: "clarity", icon: "Brain", reason: "Based on mission progress and daily completion." },
+  { label: "Momentum", source: "momentum", icon: "Zap", reason: "Based on task completion, mission progress, and pending rewards." },
 ];
 
 const defaultDashboardLabels = {
@@ -224,6 +224,7 @@ const normalizeCustomStat = (stat, idx = 0) => ({
   source: safeText(stat?.source || stat?.key || slugText(stat?.label || `stat-${idx}`), 40),
   value: stat?.value === undefined ? undefined : Math.round(clamp(stat.value)),
   icon: iconMap[safeText(stat?.icon, 40)] ? safeText(stat?.icon, 40) : "Sparkles",
+  reason: safeText(stat?.reason || "", 220),
 });
 
 const normalizeDashboardLabels = (labels = {}) => ({
@@ -436,14 +437,15 @@ function Progress({ value, t, pulse = false }) {
   );
 }
 
-function StatBar({ label, value, icon: Icon, t }) {
+function StatBar({ label, value, icon: Icon, t, explanation }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" title={explanation}>
       <div className={`flex items-center justify-between text-xs ${t.muted}`}>
         <span className="flex items-center gap-2"><Icon className="h-3.5 w-3.5" />{label}</span>
         <span>{displayPercent(value)}%</span>
       </div>
       <Progress value={value} t={t} />
+      {explanation && <p className={`text-[11px] leading-snug ${t.dim}`}>{explanation}</p>}
     </div>
   );
 }
@@ -650,6 +652,7 @@ export default function LifeOSGenesis() {
     rewards: Math.min(queuedXP, 100),
   };
   const displayedStats = customStats.length ? customStats : defaultCustomStats;
+  const usingImportedStats = customStats.length > 0 && customStats !== defaultCustomStats;
   const profileStatValue = customStats.find((stat) => typeof stat.value === "number")?.value;
   const isPersonalized = hasPersonalizedProfile(profile);
   const dashboardStability = isPersonalized ? Math.round(clamp(profileStatValue ?? missionScore)) : academicStability;
@@ -737,7 +740,8 @@ export default function LifeOSGenesis() {
     {
       "label": "",
       "value": 0,
-      "icon": ""
+      "icon": "",
+      "reason": ""
     }
   ],
   "vaultItems": [
@@ -1269,7 +1273,8 @@ ${sharedInstructions}`;
                 {displayedStats.map((stat) => {
                   const Icon = iconMap[stat.icon] || Sparkles;
                   const value = stat.value ?? statValues[stat.source] ?? 0;
-                  return <StatBar key={`${stat.label}-${stat.source}`} label={stat.label} value={value} icon={Icon} t={t} />;
+                  const explanation = stat.reason || (usingImportedStats ? "Imported from Life Mirror profile" : defaultCustomStats.find(item => item.source === stat.source || item.label === stat.label)?.reason);
+                  return <StatBar key={`${stat.label}-${stat.source}`} label={stat.label} value={value} icon={Icon} t={t} explanation={explanation} />;
                 })}
               </div>
             </CardContent>
